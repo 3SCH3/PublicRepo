@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>SinCos Arena</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hud" aria-live="polite">
+        <div class="chip">Welle: <span id="wave">1</span></div>
+        <div class="chip">Score: <span id="score">0</span></div>
+        <div class="chip">HP: <span id="hp">100</span></div>
+        <div class="chip">Lernpunkte: <span id="learnPts">0</span></div>
+      </header>
+
+      <canvas id="game" aria-label="SinCos Arena Spielbereich"></canvas>
+
+      <section class="lesson" id="lesson">
+        <strong>Trig live:</strong>
+        <span id="trigReadout">sin(a)=0.00 | cos(a)=1.00 | tan(a)=0.00</span>
+      </section>
+
+      <section class="overlay" id="overlay">
+        <div class="card">
+          <h1>SinCos Arena</h1>
+          <p>
+            Brawl-Style Top-Down Shooter fuer den Browser.<br />
+            Links bewegen, rechts zielen und halten zum Schiessen.<br />
+            Zwischen den Wellen loest du Trig-Aufgaben.
+          </p>
+          <button id="startBtn" type="button">Start</button>
+        </div>
+      </section>
+
+      <section class="overlay hidden" id="quizOverlay">
+        <div class="card quiz-card">
+          <h2 id="quizTitle">Lernrunde</h2>
+          <p id="quizMeta">sin, cos, tan sind Verhaeltnisse im rechtwinkligen Dreieck.</p>
+          <p id="quizQuestion">Frage</p>
+          <div class="quiz-options" id="quizOptions"></div>
+          <p id="quizFeedback" class="quiz-feedback"></p>
+          <button id="quizNextBtn" type="button" class="hidden">Weiter</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>
