@@ -108,6 +108,18 @@ body {
 
 .quiz-card {
   text-align: left;
+  width: min(94vw, 480px);
+}
+
+#triCanvas {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  height: 150px;
+  margin: 0 0 10px;
+  background: #fff9ee;
+  border: 2px solid #d4a85044;
+  border-radius: 10px;
 }
 
 .quiz-card h2 {

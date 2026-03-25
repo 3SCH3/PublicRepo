@@ -17,6 +17,7 @@ const quizQuestion = document.getElementById('quizQuestion');
 const quizOptions = document.getElementById('quizOptions');
 const quizFeedback = document.getElementById('quizFeedback');
 const quizNextBtn = document.getElementById('quizNextBtn');
+const triCanvas = document.getElementById('triCanvas');
 
 const controlsAsset = new Image();
 controlsAsset.src = 'assets/kenney-mobile-controls-sample.png';
@@ -191,45 +192,159 @@ function spawnParticles(x, y, color, count) {
 }
 
 function makeQuestionSet() {
-  const q = [];
+  const pool = buildQuestionPool();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 4);
+}
 
-  const sinNum = 3 + Math.floor(Math.random() * 7);
-  const sinDen = sinNum + 2 + Math.floor(Math.random() * 5);
-  q.push({
-    question: `Rechtwinkliges Dreieck: Gegenkathete = ${sinNum}, Hypotenuse = ${sinDen}. Was ist sin(alpha)?`,
-    options: [`${sinNum}/${sinDen}`, `${sinDen}/${sinNum}`, `${sinNum}/${sinDen - 1}`],
+// Fisher-Yates shuffle of options, returns {options, correct}
+function shuffleOptions(correctVal, wrong1, wrong2) {
+  const arr = [String(correctVal), String(wrong1), String(wrong2)];
+  for (let i = 2; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return { options: arr, correct: arr.indexOf(String(correctVal)) };
+}
+
+// Pythagorean triples: [Gegenkathete, Ankathete, Hypotenuse]
+const TRIPLES = [[3,4,5],[5,12,13],[8,15,17],[6,8,10],[9,12,15],[20,21,29]];
+function rndTriple() {
+  const t = TRIPLES[Math.floor(Math.random() * TRIPLES.length)];
+  return { g: t[0], a: t[1], h: t[2] };
+}
+
+function buildQuestionPool() {
+  const pool = [];
+
+  // --- sin ratio ---
+  {
+    const { g, a, h } = rndTriple();
+    const o = shuffleOptions(`${g}/${h}`, `${a}/${h}`, `${g}/${a}`);
+    pool.push({
+      question: `Gegenkathete = ${g}, Hypotenuse = ${h}. Wie lautet sin(\u03b1)?`,
+      options: o.options, correct: o.correct,
+      explain: `sin(\u03b1) = Gegenkathete / Hypotenuse = ${g}/${h}. Es ist ein reines Seitenverhaeltnis \u2013 keine absolute Laenge.`,
+      tri: { g, a, h, hl: ['G','H'] },
+    });
+  }
+
+  // --- cos ratio ---
+  {
+    const { g, a, h } = rndTriple();
+    const o = shuffleOptions(`${a}/${h}`, `${g}/${h}`, `${a}/${g}`);
+    pool.push({
+      question: `Ankathete = ${a}, Hypotenuse = ${h}. Wie lautet cos(\u03b1)?`,
+      options: o.options, correct: o.correct,
+      explain: `cos(\u03b1) = Ankathete / Hypotenuse = ${a}/${h}. Auch cos ist nur ein Verhaeltnis.`,
+      tri: { g, a, h, hl: ['A','H'] },
+    });
+  }
+
+  // --- tan ratio ---
+  {
+    const { g, a, h } = rndTriple();
+    const o = shuffleOptions(`${g}/${a}`, `${a}/${g}`, `${g}/${h}`);
+    pool.push({
+      question: `Gegenkathete = ${g}, Ankathete = ${a}. Wie lautet tan(\u03b1)?`,
+      options: o.options, correct: o.correct,
+      explain: `tan(\u03b1) = Gegenkathete / Ankathete = ${g}/${a}. Tangens = Steigung des Winkels.`,
+      tri: { g, a, h, hl: ['G','A'] },
+    });
+  }
+
+  // --- missing side (sin) ---
+  {
+    const { g, a, h } = rndTriple();
+    const o = shuffleOptions(g, a, h);
+    pool.push({
+      question: `sin(\u03b1) = ${g}/${h}, Hypotenuse = ${h}. Wie lang ist die Gegenkathete?`,
+      options: o.options.map(String), correct: o.correct,
+      explain: `Gegenkathete = sin(\u03b1) \u00d7 H = (${g}/${h}) \u00d7 ${h} = ${g}. Das Verhaeltnis rueckwaerts rechnen.`,
+      tri: { g, a, h, hl: ['G','H'] },
+    });
+  }
+
+  // --- missing side (cos) ---
+  {
+    const { g, a, h } = rndTriple();
+    const o = shuffleOptions(a, g, h);
+    pool.push({
+      question: `cos(\u03b1) = ${a}/${h}, Hypotenuse = ${h}. Wie lang ist die Ankathete?`,
+      options: o.options.map(String), correct: o.correct,
+      explain: `Ankathete = cos(\u03b1) \u00d7 H = (${a}/${h}) \u00d7 ${h} = ${a}. Formel umstellen.`,
+      tri: { g, a, h, hl: ['A','H'] },
+    });
+  }
+
+  // --- scale invariance (conceptual) ---
+  {
+    const o = shuffleOptions('Beide bleiben gleich', 'sin wird groesser, cos kleiner', 'Beide werden groesser');
+    pool.push({
+      question: 'Alle Seiten eines aehnlichen Dreiecks verdoppeln sich. Was passiert mit sin(\u03b1) und cos(\u03b1)?',
+      options: o.options, correct: o.correct,
+      explain: 'sin und cos sind Verhaeltnisse. Der Faktor kuerzt sich heraus \u2013 die Werte bleiben gleich!',
+      tri: { g:3, a:4, h:5, hl:[] },
+    });
+  }
+
+  // --- formula identification sin ---
+  {
+    const o = shuffleOptions('sin(\u03b1) = G / H', 'sin(\u03b1) = A / H', 'sin(\u03b1) = G / A');
+    pool.push({
+      question: 'Welche Formel ist korrekt? (G=Gegenkathete, A=Ankathete, H=Hypotenuse)',
+      options: o.options, correct: o.correct,
+      explain: 'sin(\u03b1) = Gegenkathete / Hypotenuse = G/H. Merkhilfe: \u201eSinus = Gegenkathete durch Hypotenuse\u201c.',
+      tri: { g:3, a:4, h:5, hl:['G','H'] },
+    });
+  }
+
+  // --- formula identification cos ---
+  {
+    const o = shuffleOptions('cos(\u03b1) = A / H', 'cos(\u03b1) = G / H', 'cos(\u03b1) = G / A');
+    pool.push({
+      question: 'Welche Formel beschreibt cos(\u03b1)? (G, A, H wie im Dreieck)',
+      options: o.options, correct: o.correct,
+      explain: 'cos(\u03b1) = Ankathete / Hypotenuse = A/H.',
+      tri: { g:3, a:4, h:5, hl:['A','H'] },
+    });
+  }
+
+  // --- which side is hypotenuse ---
+  {
+    const o = shuffleOptions('Gegenueber dem rechten Winkel', 'Die kuerzeste Seite', 'Gegenueber dem Winkel alpha');
+    pool.push({
+      question: 'Wo liegt die Hypotenuse im rechtwinkligen Dreieck?',
+      options: o.options, correct: o.correct,
+      explain: 'Die Hypotenuse liegt gegenueber dem rechten Winkel und ist immer die laengste Seite.',
+      tri: { g:3, a:4, h:5, hl:['H'] },
+    });
+  }
+
+  // --- sin(30) special angle ---
+  pool.push({
+    question: 'Wie lautet sin(30\u00b0)? (Standardwinkel auswendig lernen!)',
+    options: ['1/2', '\u221a2/2 \u2248 0.71', '\u221a3/2 \u2248 0.87'],
     correct: 0,
-    explain: 'sin(alpha) = Gegenkathete/Hypotenuse. sin ist ein reines Verhaeltnis, keine absolute Laenge.',
+    explain: 'sin(30\u00b0) = 1/2. Die Gegenkathete ist genau halb so lang wie die Hypotenuse.',
+    tri: { g:1, a:2, h:2, hl:['G','H'], aLabel:'30\u00b0' },
   });
 
-  const cosNum = 4 + Math.floor(Math.random() * 7);
-  const cosDen = cosNum + 2 + Math.floor(Math.random() * 5);
-  q.push({
-    question: `Rechtwinkliges Dreieck: Ankathete = ${cosNum}, Hypotenuse = ${cosDen}. Was ist cos(alpha)?`,
-    options: [`${cosNum}/${cosDen}`, `${cosDen}/${cosNum}`, `${cosNum}/${cosDen - 2}`],
-    correct: 0,
-    explain: 'cos(alpha) = Ankathete/Hypotenuse. Auch cos beschreibt nur ein Seitenverhaeltnis.',
-  });
+  // --- tan > 1 concept ---
+  {
+    const o = shuffleOptions('keine Grenze nach oben', 'maximal 1', 'maximal 90');
+    pool.push({
+      question: 'Wie gross kann tan(\u03b1) werden, wenn der Winkel gegen 90\u00b0 geht?',
+      options: o.options, correct: o.correct,
+      explain: 'tan(\u03b1) = G/A. Wenn \u03b1 \u2192 90\u00b0 wird die Ankathete 0 \u2013 tan wird unendlich gross!',
+      tri: { g:9, a:1, h:9, hl:['G','A'] },
+    });
+  }
 
-  const tanOpp = 2 + Math.floor(Math.random() * 8);
-  const tanAdj = 2 + Math.floor(Math.random() * 8);
-  q.push({
-    question: `Rechtwinkliges Dreieck: Gegenkathete = ${tanOpp}, Ankathete = ${tanAdj}. Was ist tan(alpha)?`,
-    options: [`${tanOpp}/${tanAdj}`, `${tanAdj}/${tanOpp}`, `${tanOpp}/${tanOpp + tanAdj}`],
-    correct: 0,
-    explain: 'tan(alpha) = Gegenkathete/Ankathete. Auch der Tangens ist ein Verhaeltnis.',
-  });
-
-  q.push({
-    question:
-      'Wenn bei zwei aehnlichen rechtwinkligen Dreiecken alle Seiten im gleichen Faktor wachsen: Was passiert mit sin(alpha) und cos(alpha)?',
-    options: ['Beide bleiben gleich.', 'Beide werden groesser.', 'Beide werden kleiner.'],
-    correct: 0,
-    explain:
-      'Kernidee: sin und cos sind nur Verhaeltnisse. Gleicher Skalierungsfaktor oben und unten kuerzt sich weg.',
-  });
-
-  return q;
+  return pool;
 }
 
 function startQuiz() {
@@ -244,13 +359,14 @@ function startQuiz() {
 
 function showQuizQuestion() {
   const item = state.quiz.questions[state.quiz.index];
-  quizTitle.textContent = `Lernrunde vor Welle ${state.wave + 1}`;
-  quizMeta.textContent =
-    'Wiederholung: sin, cos, tan im rechtwinkligen Dreieck und warum sin/cos nur Verhaeltnisse sind.';
+  quizTitle.textContent = `Lernrunde – Aufgabe ${state.quiz.index + 1} / ${state.quiz.questions.length}`;
+  quizMeta.textContent = 'sin = G/H  \u00b7  cos = A/H  \u00b7  tan = G/A  (alle sind Seitenverhaeltnisse)';
   quizQuestion.textContent = item.question;
   quizFeedback.textContent = '';
   quizNextBtn.classList.add('hidden');
   quizOptions.innerHTML = '';
+
+  drawQuizTriangle(item);
 
   item.options.forEach((option, idx) => {
     const btn = document.createElement('button');
@@ -260,6 +376,74 @@ function showQuizQuestion() {
     btn.addEventListener('click', () => handleAnswer(idx));
     quizOptions.appendChild(btn);
   });
+}
+
+function drawQuizTriangle(item) {
+  if (!triCanvas) return;
+  if (!item.tri) {
+    triCanvas.style.display = 'none';
+    return;
+  }
+  triCanvas.style.display = 'block';
+  const tx = triCanvas.getContext('2d');
+  const W = triCanvas.width;
+  const H = triCanvas.height;
+  tx.clearRect(0, 0, W, H);
+
+  // Parchment background
+  tx.fillStyle = '#fff9ee';
+  tx.fillRect(0, 0, W, H);
+
+  const { g, a, h, hl = [], aLabel } = item.tri;
+
+  // Vertices: A=bottom-left(alpha), C=bottom-right(right angle), B=top-right
+  const ax = 30, ay = H - 24;
+  const cx = W - 30, cy = H - 24;
+  const bx = W - 30, by = 22;
+
+  const HL_COLOR = '#c9442a';
+  const BASE_COLOR = '#444';
+  function sc(id) { return hl.includes(id) ? HL_COLOR : BASE_COLOR; }
+  function sw(id) { return hl.includes(id) ? 3.5 : 2; }
+
+  // Hypotenuse A→B
+  tx.beginPath(); tx.strokeStyle = sc('H'); tx.lineWidth = sw('H');
+  tx.moveTo(ax, ay); tx.lineTo(bx, by); tx.stroke();
+  // Gegenkathete B→C (vertical)
+  tx.beginPath(); tx.strokeStyle = sc('G'); tx.lineWidth = sw('G');
+  tx.moveTo(bx, by); tx.lineTo(cx, cy); tx.stroke();
+  // Ankathete A→C (horizontal)
+  tx.beginPath(); tx.strokeStyle = sc('A'); tx.lineWidth = sw('A');
+  tx.moveTo(ax, ay); tx.lineTo(cx, cy); tx.stroke();
+
+  // Right-angle square at C
+  const sq = 9;
+  tx.fillStyle = '#eae0d555';
+  tx.fillRect(cx - sq, cy - sq, sq, sq);
+  tx.strokeStyle = '#888'; tx.lineWidth = 1.5;
+  tx.strokeRect(cx - sq, cy - sq, sq, sq);
+
+  // Alpha arc at A
+  const alphaAng = Math.atan2(ay - by, bx - ax);
+  tx.beginPath(); tx.strokeStyle = '#2761a8'; tx.lineWidth = 1.8;
+  tx.arc(ax, ay, 19, -alphaAng, 0); tx.stroke();
+
+  // Labels
+  tx.font = 'bold 12px sans-serif';
+  tx.textAlign = 'center';
+  // Hypotenuse
+  tx.fillStyle = sc('H');
+  tx.fillText(`H=${h}`, (ax + bx) / 2 - 14, (ay + by) / 2 - 4);
+  // Gegenkathete
+  tx.fillStyle = sc('G');
+  tx.fillText(`G=${g}`, cx + 16, (by + cy) / 2 + 4);
+  // Ankathete
+  tx.fillStyle = sc('A');
+  tx.fillText(`A=${a}`, (ax + cx) / 2, ay + 15);
+  // Alpha
+  tx.fillStyle = '#2761a8'; tx.font = 'bold 13px sans-serif';
+  tx.fillText(aLabel || '\u03b1', ax + 26, ay - 4);
+  tx.textAlign = 'left';
 }
 
 function handleAnswer(answerIndex) {
@@ -431,31 +615,45 @@ function update(dt) {
 }
 
 function drawBackground() {
-  const g = ctx.createLinearGradient(0, 0, state.width, state.height);
-  g.addColorStop(0, '#f8ebc8');
-  g.addColorStop(0.55, '#e7c98d');
-  g.addColorStop(1, '#c79053');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, state.width, state.height);
-
-  const centerGlow = ctx.createRadialGradient(state.width * 0.5, state.height * 0.52, 60, state.width * 0.5, state.height * 0.52, state.width * 0.7);
-  centerGlow.addColorStop(0, '#ffffff30');
-  centerGlow.addColorStop(1, '#ffffff00');
-  ctx.fillStyle = centerGlow;
-  ctx.fillRect(0, 0, state.width, state.height);
-
-  ctx.globalAlpha = 0.14;
-  for (let y = 0; y < state.height; y += 40) {
-    ctx.fillStyle = y % 80 === 0 ? '#0000001f' : '#ffffff22';
-    ctx.fillRect(0, y, state.width, 2);
+  // Chequered sand tiles
+  const TILE = 68;
+  for (let tx = 0; tx < state.width; tx += TILE) {
+    for (let ty = 0; ty < state.height; ty += TILE) {
+      const even = ((Math.floor(tx / TILE) + Math.floor(ty / TILE)) % 2) === 0;
+      ctx.fillStyle = even ? '#e8cc7a' : '#d8bc68';
+      ctx.fillRect(tx, ty, TILE, TILE);
+    }
   }
-  ctx.globalAlpha = 1;
 
-  if (controlsAsset.complete) {
-    ctx.globalAlpha = 0.09;
-    const w = 180;
+  // Subtle grid lines
+  ctx.strokeStyle = '#0000001a';
+  ctx.lineWidth = 1;
+  for (let tx = 0; tx <= state.width; tx += TILE) {
+    ctx.beginPath(); ctx.moveTo(tx, 0); ctx.lineTo(tx, state.height); ctx.stroke();
+  }
+  for (let ty = 0; ty <= state.height; ty += TILE) {
+    ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(state.width, ty); ctx.stroke();
+  }
+
+  // Center spotlight
+  const spot = ctx.createRadialGradient(state.width / 2, state.height / 2, 0, state.width / 2, state.height / 2, state.width * 0.55);
+  spot.addColorStop(0, '#ffffff1a');
+  spot.addColorStop(1, '#00000000');
+  ctx.fillStyle = spot;
+  ctx.fillRect(0, 0, state.width, state.height);
+
+  // Vignette
+  const vig = ctx.createRadialGradient(state.width / 2, state.height / 2, state.width * 0.28, state.width / 2, state.height / 2, state.width * 0.72);
+  vig.addColorStop(0, '#00000000');
+  vig.addColorStop(1, '#00000060');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, state.width, state.height);
+
+  if (controlsAsset.complete && controlsAsset.naturalWidth > 0) {
+    ctx.globalAlpha = 0.07;
+    const w = 150;
     const h = (controlsAsset.height / controlsAsset.width) * w;
-    ctx.drawImage(controlsAsset, state.width - w - 12, state.height - h - 12, w, h);
+    ctx.drawImage(controlsAsset, state.width - w - 10, state.height - h - 10, w, h);
     ctx.globalAlpha = 1;
   }
 }
@@ -492,24 +690,45 @@ function drawPlayer() {
   ctx.save();
   ctx.translate(p.x, p.y);
 
+  // Shadow
   ctx.beginPath();
-  ctx.fillStyle = '#00000030';
-  ctx.ellipse(0, p.radius * 0.9, p.radius * 0.95, p.radius * 0.55, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#00000038';
+  ctx.ellipse(1, p.radius * 0.88, p.radius * 0.88, p.radius * 0.42, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  const body = ctx.createRadialGradient(-4, -5, 1, 0, 0, p.radius + 3);
-  body.addColorStop(0, '#6db1ff');
-  body.addColorStop(1, '#2f6fb6');
+  // Body gradient
+  const body = ctx.createRadialGradient(-5, -6, 1, 0, 0, p.radius + 3);
+  body.addColorStop(0, '#80c8ff');
+  body.addColorStop(1, '#1a5fa0');
   ctx.beginPath();
   ctx.fillStyle = body;
   ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = '#0d3a6e';
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
+  // Eyes (body space, not rotated with gun)
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(-5, -5, 3.5, 0, Math.PI * 2);
+  ctx.arc(5, -5, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#111133';
+  ctx.beginPath();
+  ctx.arc(-5, -5, 1.8, 0, Math.PI * 2);
+  ctx.arc(5, -5, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Gun (rotates with aim)
   ctx.rotate(p.angle);
-  ctx.fillStyle = '#163f6d';
-  ctx.fillRect(5, -5, 22, 10);
-  ctx.fillStyle = '#1d588f';
-  ctx.fillRect(9, -3, 12, 6);
+  ctx.fillStyle = '#0d3050';
+  ctx.fillRect(4, -5, 24, 10);
+  ctx.fillStyle = '#1d578f';
+  ctx.fillRect(9, -3, 14, 6);
+  ctx.fillStyle = '#4a90c8';
+  ctx.fillRect(24, -2, 4, 4);
+
   ctx.restore();
 }
 
@@ -528,29 +747,64 @@ function drawBullets() {
 
 function drawEnemies() {
   for (const e of state.enemies) {
+    ctx.save();
+    ctx.translate(e.x, e.y);
+
+    // Shadow
     ctx.beginPath();
-    ctx.fillStyle = '#0000002c';
-    ctx.ellipse(e.x, e.y + e.radius * 0.85, e.radius * 0.9, e.radius * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#0000002a';
+    ctx.ellipse(1, e.radius * 0.82, e.radius * 0.82, e.radius * 0.38, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    const hitMix = e.flash > 0 ? '#f2b6ac' : '#d45036';
+    // Body gradient
+    const flash = e.flash > 0;
+    const gr = ctx.createRadialGradient(-e.radius * 0.28, -e.radius * 0.3, 0, 0, 0, e.radius);
+    gr.addColorStop(0, flash ? '#ffc0aa' : '#e85040');
+    gr.addColorStop(1, flash ? '#d07060' : '#7a180c');
     ctx.beginPath();
-    ctx.fillStyle = hitMix;
-    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+    ctx.fillStyle = gr;
+    ctx.arc(0, 0, e.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#3a0a04';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Horns
+    ctx.fillStyle = '#3a0a04';
+    ctx.beginPath();
+    ctx.moveTo(-e.radius * 0.5, -e.radius * 0.72);
+    ctx.lineTo(-e.radius * 0.62, -e.radius * 1.18);
+    ctx.lineTo(-e.radius * 0.24, -e.radius * 0.88);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(e.radius * 0.5, -e.radius * 0.72);
+    ctx.lineTo(e.radius * 0.62, -e.radius * 1.18);
+    ctx.lineTo(e.radius * 0.24, -e.radius * 0.88);
+    ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = '#2b150f';
+    // Eyes
+    ctx.fillStyle = flash ? '#ff8800' : '#ffee00';
     ctx.beginPath();
-    ctx.arc(e.x - e.radius * 0.35, e.y - e.radius * 0.15, 1.7, 0, Math.PI * 2);
-    ctx.arc(e.x + e.radius * 0.35, e.y - e.radius * 0.15, 1.7, 0, Math.PI * 2);
+    ctx.arc(-e.radius * 0.3, -e.radius * 0.2, e.radius * 0.15, 0, Math.PI * 2);
+    ctx.arc(e.radius * 0.3, -e.radius * 0.2, e.radius * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1a0000';
+    ctx.beginPath();
+    ctx.arc(-e.radius * 0.3, -e.radius * 0.2, e.radius * 0.07, 0, Math.PI * 2);
+    ctx.arc(e.radius * 0.3, -e.radius * 0.2, e.radius * 0.07, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.restore();
+
+    // HP bar
     const maxHp = 2 + Math.floor(state.wave / 2);
     const hpRatio = clamp(e.hp / maxHp, 0, 1);
-    ctx.fillStyle = '#00000033';
-    ctx.fillRect(e.x - 13, e.y - e.radius - 10, 26, 4);
-    ctx.fillStyle = '#5cc35f';
-    ctx.fillRect(e.x - 13, e.y - e.radius - 10, 26 * hpRatio, 4);
+    ctx.fillStyle = '#00000044';
+    ctx.fillRect(e.x - 14, e.y - e.radius - 14, 28, 5);
+    ctx.fillStyle = hpRatio > 0.5 ? '#5cc35f' : hpRatio > 0.25 ? '#e8a030' : '#d04028';
+    ctx.fillRect(e.x - 14, e.y - e.radius - 14, 28 * hpRatio, 5);
   }
 }
 
